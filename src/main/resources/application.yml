@@ -1,0 +1,112 @@
+spring:
+  application:
+    name: restaurant-booking-system
+  
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:dineout_db}?sslMode=verify-full  # CVE-2025-49146: enforce SSL to prevent channel binding bypass MITM
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+  
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+    jedis:
+      pool:
+        max-active: 20
+        max-idle: 10
+        min-idle: 5
+  
+  cache:
+    type: redis
+    redis:
+      time-to-live: 3600000 # 1 hour
+
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    include-message: always
+    include-binding-errors: always
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:dGhpc2lzYXZlcnlzZWNyZXRrZXlmb3Jqd3R0b2tlbmdlbmVyYXRpb25wbGVhc2VjaGFuZ2VpdGlucHJvZHVjdGlvbg==}
+  expiration: ${JWT_EXPIRATION:86400000} # 24 hours in milliseconds
+  refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000} # 7 days in milliseconds
+
+# API Rate Limiting
+api:
+  rate-limit:
+    enabled: true
+    requests-per-minute: 100
+
+# Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+      # CVE-2026-22731: Do not configure health group additional-path values
+      # that overlap with any application endpoints requiring authentication.
+      probes:
+        enabled: false
+  cloudfoundry:
+    enabled: false  # CVE-2026-22733: Disable CloudFoundry actuator endpoints to prevent authentication bypass
+    skip-ssl-validation: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+  tracing:
+    sampling:
+      probability: ${OTEL_SAMPLING_PROBABILITY:1.0} # 100% in dev; lower (e.g. 0.1) in prod
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+
+# Logging Configuration
+logging:
+  pattern:
+    # Embeds traceId and spanId into every log line for correlation with OTel traces
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level [traceId=%X{traceId:-} spanId=%X{spanId:-}] %logger{36} - %msg%n"
+  level:
+    root: INFO
+    com.dineout: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: /var/log/dineout/application.log
+
+# Swagger/OpenAPI Configuration
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
